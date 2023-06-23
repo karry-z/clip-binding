@@ -16,6 +16,7 @@ from torch.utils.data.dataloader import DataLoader
 from datasets.clevr_dataset import ObjectDataset, RelDataset
 from models import get_model
 from utils import set_seed, save_predictions
+from lora_wrapper import LoRA
 
 DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
@@ -267,8 +268,14 @@ if __name__ == "__main__":
     # get the model
     logger.info("loading the model...")
     model, optimizer = get_model(dataset["train"], config, device)
-
-    model.to(device)
+    model = model.to('cpu')
+    lora_config = '/user/home/pu22650/stable-diffusion/lora_wrapper/example_config.json'
+    with open(lora_config, 'r') as f:
+        lora_config = json.load(f)
+    lora = LoRA(lora_config)
+    model = lora.wrap(model)
+    model = model.float()
+    model = model.to(device)
 
     if not config.evaluate_only:
         logger.info("training the model...")

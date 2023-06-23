@@ -141,7 +141,7 @@ class RelDataset(Dataset):
 
         # shuffle the texts and return the label of the correct text
         indices = list(range(len(texts)))
-        random.shuffle(indices)
+        # random.shuffle(indices) # comment out for runing Investigate_CLIP_embeddings.py
         texts = [texts[i] for i in indices]
         label = indices.index(0)
 

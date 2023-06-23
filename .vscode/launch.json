@@ -1,0 +1,91 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode":false,
+        },
+        {
+            "name": "train_lora_peft",
+            "type": "python",
+            "request": "launch",
+            "program": "/user/home/pu22650/clip-binding/train_lora_peft.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--model_name",
+                "clip",
+                "--dataset",
+                "rel",
+                "--epochs",
+                "2",
+                "--save_dir",
+                "/user/work/pu22650/clip-binding-out",
+                "--save_model",
+                "--train_batch_size",
+                "4",
+                "--eval_batch_size",
+                "4",
+            ],
+        },
+        {
+            "name": "train_clip_mlp",
+            "type": "python",
+            "request": "launch",
+            "program": "/user/home/pu22650/clip-binding/train_CLIP_mlp.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--model_name",
+                "clip", // clip, csp, add, mult, conv, rf, tl
+                "--dataset",
+                "rel", // single-object, two-object, rel
+                "--epochs",
+                "2",
+                "--save_dir",
+                "/user/home/pu22650/clip-binding/out/clip_mlp",
+                "--save_model",
+                "--train_batch_size",
+                "4",
+                "--eval_batch_size",
+                "4",
+            ],
+        },
+        {
+            "name": "Python: Attach",
+            "type": "python",
+            "request": "attach",
+            "connect": {
+                "host": "bp1-gpu001",
+                "port": 5678
+            },
+            "justMyCode": false,
+        },
+        {
+            "name": "train",
+            "type": "python",
+            "request": "launch",
+            "program": "/user/home/pu22650/clip-binding/train.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--model_name",
+                "clip", // clip, csp, add, mult, conv, rf, tl
+                "--dataset",
+                "rel", // single-object, two-object, rel
+                "--epochs",
+                "2",
+                "--save_dir",
+                "/user/home/pu22650/clip-binding/out",
+                "--save_model"
+            ],
+        }
+    ]
+}

@@ -1,0 +1,29 @@
+cpu-bind=MASK - bp1-gpu030, task  0  0 [22138]: mask 0x1000100 set
+job name: ---clip_freezemost_mlp_rel_2---
+host: ---bp1-gpu030.data.bp.acrc.priv---
+Time: ---Wed Jun 21 14:50:15 BST 2023---
+Directory: ---/user/home/pu22650/clip-binding---
+Slurm job ID: ---5548189---
+This jobs runs on the following machines: ---bp1-gpu030---
+
+/user/home/pu22650/.conda/envs/ldm/bin/python
+name, memory.free [MiB]
+NVIDIA GeForce RTX 3090, 24259 MiB
+--------------------LOG START-------------------------
+cpu-bind=MASK - bp1-gpu030, task  0  0 [22180]: mask 0x1000100 set
+/user/home/pu22650/.conda/envs/ldm/lib/python3.8/site-packages/torchvision/io/image.py:13: UserWarning: Failed to load image Python extension: libtorch_cuda_cu.so: cannot open shared object file: No such file or directory
+  warn(f"Failed to load image Python extension: {e}")
+2023-06-21 14:50:27 INFO Namespace(attr_dropout=0.2, clip_model='ViT-L/14', context_length=77, dataset='rel', emb_dim=768, epochs=2, eval_batch_size=64, evaluate_only=False, gradient_accumulation_steps=1, lr=1e-06, model_name='clip', save_dir='/user/work/pu22650/clip-binding-out/clip_freezemost_mlp_rel_2', save_model=True, seed=0, train_batch_size=64, weight_decay=1e-05)
+2023-06-21 14:50:27 INFO loading the dataset...
+2023-06-21 14:50:27 INFO loading the model...
+2023-06-21 14:50:36 INFO training the model...
+2023-06-21 15:25:40 INFO Training Accuracy is: 52.26
+epoch 1, train loss 0.96, train accuracy 52.26, val acc 0.00, gen acc 0.00
+2023-06-21 16:03:13 INFO Training Accuracy is: 65.81
+epoch 2, train loss 0.68, train accuracy 65.81, val acc 0.00, gen acc 0.00
+2023-06-21 16:03:14 INFO done!
+
+real	72m58.549s
+user	0m0.058s
+sys	0m0.008s
+--------------------LOG END-------------------------

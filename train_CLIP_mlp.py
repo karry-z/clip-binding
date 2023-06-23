@@ -267,8 +267,56 @@ if __name__ == "__main__":
     # get the model
     logger.info("loading the model...")
     model, optimizer = get_model(dataset["train"], config, device)
+    # # freeze the clip model
+    # for param in model.clip_model.parameters():
+    #     param.requires_grad = False
+    
+    # freeze the clip model but leave the last layer trainable
+    for param in model.clip_model.parameters():
+        param.requires_grad = False
+    for param in model.clip_model.visual.transformer.resblocks[23].parameters():
+        param.requires_grad = True
+    for param in model.clip_model.transformer.resblocks[11].parameters():
+        param.requires_grad = True
 
+    model.clip_model.transformer.add_module('mlp', torch.nn.Sequential(
+    torch.nn.Linear(config.emb_dim, config.emb_dim),
+    torch.nn.ReLU(),    
+    ))
+    
+    model.clip_model.visual.add_module('mlp', torch.nn.Sequential(
+        torch.nn.Linear(config.emb_dim, config.emb_dim), 
+        torch.nn.ReLU(),
+    ))
     model.to(device)
+    model.float()
+    import types
+    def forward_(self, batch_images, texts):
+        texts = list(map(list, zip(*texts)))
+        bsz = len(texts)
+        num_captions = len(texts[0])
+
+        text_features = self.compute_text_representations(texts)
+        text_features = self.clip_model.transformer.mlp(text_features)
+
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        text_features = text_features.view([bsz, num_captions, -1])
+
+        batch_images = batch_images.to(self.device)
+        batch_feat = self.encode_image(batch_images)
+        batch_feat = self.clip_model.visual.mlp(batch_feat)
+
+        batch_feat = batch_feat / batch_feat.norm(dim=-1, keepdim=True)
+        batch_feat = batch_feat.unsqueeze(2)
+
+        logits_per_image = self.clip_model.logit_scale.exp() * torch.bmm(
+            text_features, batch_feat
+        )
+        logits_per_image = logits_per_image.squeeze(2)
+        return logits_per_image
+
+
+    model.forward = types.MethodType(forward_, model)
 
     if not config.evaluate_only:
         logger.info("training the model...")

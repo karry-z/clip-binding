@@ -1,4 +1,4 @@
-DATASET_DIR = "data/datasets/"
+DATASET_DIR = "/user/work/pu22650/data/"
 
 DATASET_PATHS = {
     "single-object": {
