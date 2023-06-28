@@ -5,12 +5,35 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "train_clip_mlp_aggr",
+            "type": "python",
+            "request": "launch",
+            "program": "/user/home/pu22650/clip-binding/train_CLIP_mlp_aggr.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                "--model_name",
+                "clip", // clip, csp, add, mult, conv, rf, tl
+                "--dataset",
+                "rel", // single-object, two-object, rel
+                "--epochs",
+                "2",
+                "--save_dir",
+                "/user/home/pu22650/clip-binding/out/clip_mlp_aggr",
+                "--save_model",
+                "--train_batch_size",
+                "4",
+                "--eval_batch_size",
+                "4",
+            ],
+        },
+        {
             "name": "Python: Current File",
             "type": "python",
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
-            "justMyCode":false,
+            "justMyCode": false,
         },
         {
             "name": "train_lora_peft",
