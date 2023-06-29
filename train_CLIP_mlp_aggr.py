@@ -280,7 +280,7 @@ if __name__ == "__main__":
         param.requires_grad = True
 
     model.add_module("mlp", torch.nn.Sequential(
-        torch.nn.Linear(2*config.emb_dim, 5),
+        torch.nn.Linear(6*config.emb_dim, 5),
         torch.nn.Softmax(dim=-1)
     ))
     model.to(device)
@@ -292,18 +292,20 @@ if __name__ == "__main__":
         num_captions = len(texts[0])
 
         text_features = self.compute_text_representations(texts)
-        text_features = self.clip_model.transformer.mlp(text_features)
+        # text_features = self.clip_model.transformer.mlp(text_features)
 
         # text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         # text_features = text_features.view([bsz, num_captions, -1])
 
         batch_images = batch_images.to(self.device)
         batch_feat = self.encode_image(batch_images)
-        batch_feat = self.clip_model.visual.mlp(batch_feat)
+        # batch_feat = self.clip_model.visual.mlp(batch_feat)
 
         # batch_feat = batch_feat / batch_feat.norm(dim=-1, keepdim=True)
         # batch_feat = batch_feat.unsqueeze(2)
-        logits_per_image = self.mlp(torch.cat([text_features, batch_feat], dim=-1))
+        text_features = text_features.reshape([-1, 5, 768])
+        batch_feat = batch_feat.reshape([-1, 1, 768])
+        logits_per_image = self.mlp(torch.cat([text_features, batch_feat], dim=1).reshape([-1, 6*768]))
 
         # logits_per_image = self.clip_model.logit_scale.exp() * torch.bmm(
         #     text_features, batch_feat
