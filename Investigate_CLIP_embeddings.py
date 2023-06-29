@@ -1,6 +1,10 @@
 # Investigate CLIP embeddings
 
 # Lib
+import random
+from PIL import Image
+import types
+from datasets.clevr_dataset import preprocess
 import torch
 from train import *
 import pandas as pd
@@ -48,13 +52,47 @@ def get_distance_sample_mean(model, dataset, device):
             cRb = logits_per_image[:, 3].mean().item()
             aRc = logits_per_image[:, 4].mean().item()
             df.loc[i] = [aRb, bRa, aSb, cRb, aRc]
+            if i > 2: # debug
+                break
     return df
 
 
+def getitem(self, idx):
+    img_path = self.img_dir + self.ims_labels[idx][0]
+    image = Image.open(img_path)  # Image from PIL module
+    image = preprocess(image)
+
+    # for regular train/validation/testing
+    subj, rel, obj = self.ims_labels[idx][1].strip().split()
+
+    # Distractors have the following structure. If the true label is aRb,
+    # the distractors are bRa, aSb, cRb, aRc, where S is the opposite relation to R
+    # and c is an object not equal to a or b
+    distractors = []
+    distractors.append(f"{obj} {rel} {subj}")
+    distractors.append(f"{subj} {self.rel_opposites[rel]} {obj}")
+    # since there are always three nouns, this shouldn't make a difference.
+    other_nouns = list(set(self.nouns).difference(set([subj, obj])))
+    assert len(other_nouns) == 1
+    other_noun = other_nouns[0]
+
+    # other_noun = random.choice(other_nouns)
+    distractors.append(f"{other_noun} {rel} {obj}")
+    distractors.append(f"{subj} {rel} {other_noun}")
+    texts = [self.ims_labels[idx][1]] + distractors
+
+    # shuffle the texts and return the label of the correct text
+    indices = list(range(len(texts)))
+    texts = [texts[i] for i in indices]
+    label = indices.index(0)
+
+    return image, texts, label
+
+RelDataset.__getitem__ = getitem
 
 if __name__ == '__main__':
-    dataset = choose_dataset(config)
+    dataset = {split: RelDataset(split) for split in ["train", "val", "gen"]}
     model, optimizer = get_model(dataset["train"], config, device)
     for split in ["train", "val", "gen"]:
         df = get_distance_sample_mean(model, dataset[split], device)
-        df.to_csv(f'clip_embeddings_distance_sample_mean_{split}.csv', index=False)
+        df.to_csv(f'clip_embeddings_distance_sample_mean_{split}_debug.csv', index=False)
