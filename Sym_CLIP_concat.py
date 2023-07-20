@@ -289,11 +289,6 @@ if __name__ == "__main__":
                 "left":[0, 1, 0, 0],
                 "right":[1, 0, 0, 0]
             }
-            self.mlp = nn.Sequential(
-                nn.Linear(10, 768),
-                nn.ReLU(),
-            )
-            self.mlp.to(self.device)
         def forward(self, texts):
             sym = []
             for text_batch in texts:
@@ -304,12 +299,14 @@ if __name__ == "__main__":
                 sym.append(sym_batch)
             sym = torch.tensor(sym, dtype=torch.float32, device=self.device)
             sym = sym.view(-1, 10) # ?
-            return self.mlp(sym)
+            return sym
     model.sym = Sym(device)
     # add a mlp layer to combine the two features
     model.mlp = torch.nn.Sequential(
-        torch.nn.Linear(2*config.emb_dim, config.emb_dim),
+        torch.nn.Linear(config.emb_dim+10, config.emb_dim),
         torch.nn.ReLU(),
+        torch.nn.Linear(config.emb_dim, config.emb_dim),
+        torch.nn.ReLU()
     ) 
     # print trainable parameters | all parameters
     logger.info(
@@ -318,6 +315,12 @@ if __name__ == "__main__":
     logger.info(f"number of parameters: {sum(p.numel() for p in model.parameters())}")
     model.to(device)
     model.float()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        eps=1e-6,
+    )
     import types
     def forward_(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
