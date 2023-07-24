@@ -276,15 +276,14 @@ if __name__ == "__main__":
     for param in model.t5.parameters():
         param.requires_grad = False
     model.t5_tokenizer = AutoTokenizer.from_pretrained("t5-small")
-    # add a mlp layer to map the t5 output to the same dimension as clip
-    model.t5_mlp = torch.nn.Sequential(
-        torch.nn.Linear(512, config.emb_dim),
-        torch.nn.ReLU(),
-    ) 
+   
     # add a mlp layer to combine the two features
     model.mlp = torch.nn.Sequential(
-        torch.nn.Linear(2*config.emb_dim, config.emb_dim),
+        torch.nn.Linear(512+config.emb_dim, 300),
         torch.nn.ReLU(),
+        torch.nn.Linear(300, 300),
+        torch.nn.ReLU(),
+        torch.nn.Linear(300, config.emb_dim),
     ) 
     # print trainable parameters | all parameters
     logger.info(
@@ -293,6 +292,12 @@ if __name__ == "__main__":
     logger.info(f"number of parameters: {sum(p.numel() for p in model.parameters())}")
     model.to(device)
     model.float()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        eps=1e-6,
+    )
     import types
     def forward_(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
@@ -305,7 +310,7 @@ if __name__ == "__main__":
             encoded_input = {k: v.to(self.device) for k, v in encoded_input.items()}
             last_hidden_state = self.t5(**encoded_input).last_hidden_state
             pooled_output = torch.mean(last_hidden_state, dim=1)
-            t5_output.append(self.t5_mlp(pooled_output))
+            t5_output.append(pooled_output)
         t5_output = torch.concat(t5_output)
         text_features = self.compute_text_representations(texts)
         text_features = self.mlp(torch.cat([text_features, t5_output], dim=-1))

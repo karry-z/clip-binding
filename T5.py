@@ -278,8 +278,11 @@ if __name__ == "__main__":
     model.t5_tokenizer = AutoTokenizer.from_pretrained("t5-small")
     # add a mlp layer to map the t5 output to the same dimension as clip
     model.mlp = torch.nn.Sequential(
-        torch.nn.Linear(512, config.emb_dim),
+        torch.nn.Linear(512, 300),
         torch.nn.ReLU(),
+        torch.nn.Linear(300, 300),
+        torch.nn.ReLU(),
+        torch.nn.Linear(300, config.emb_dim),
     ) 
     # print trainable parameters | all parameters
     logger.info(
@@ -288,6 +291,12 @@ if __name__ == "__main__":
     logger.info(f"number of parameters: {sum(p.numel() for p in model.parameters())}")
     model.to(device)
     model.float()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        eps=1e-6,
+    )
     import types
     def forward_(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))

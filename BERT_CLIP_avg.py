@@ -276,11 +276,6 @@ if __name__ == "__main__":
     for param in model.bert.parameters():
         param.requires_grad = False
     model.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    # add a mlp layer to combine the two features
-    model.mlp = torch.nn.Sequential(
-        torch.nn.Linear(2*config.emb_dim, config.emb_dim),
-        torch.nn.ReLU(),
-    ) 
     # print trainable parameters | all parameters
     logger.info(
         f"number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
@@ -302,7 +297,6 @@ if __name__ == "__main__":
         bert_output = torch.concat(bert_output)
         bert_output = bert_output / bert_output.norm(dim=-1, keepdim=True)
         text_features = self.compute_text_representations(texts)
-        # text_features = self.mlp(torch.cat([text_features, bert_output], dim=-1))
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         text_features = (bert_output + text_features) * 0.5
         text_features = text_features.view([bsz, num_captions, -1])

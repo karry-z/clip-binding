@@ -277,15 +277,21 @@ if __name__ == "__main__":
         param.requires_grad = False
     model.t5_tokenizer = AutoTokenizer.from_pretrained("t5-small")
     # add a mlp layer to map the t5 output to the same dimension as clip
-    model.mlp = torch.nn.Sequential(
-        torch.nn.Linear(512, config.emb_dim),
+    model.mlp_img = torch.nn.Sequential(
+        torch.nn.Linear(config.emb_dim, 300),
         torch.nn.ReLU(),
+        torch.nn.Linear(300, 300),
+        torch.nn.ReLU(),
+        torch.nn.Linear(300, 512),
     ) 
-    # add a mlp layer to combine the two features
-    # model.mlp = torch.nn.Sequential(
-    #     torch.nn.Linear(2*config.emb_dim, config.emb_dim),
-    #     torch.nn.ReLU(),
-    # ) 
+    model.mlp_text = torch.nn.Sequential(
+        torch.nn.Linear(config.emb_dim, 300),
+        torch.nn.ReLU(),
+        torch.nn.Linear(300, 300),
+        torch.nn.ReLU(),
+        torch.nn.Linear(300, 512),
+    ) 
+
     # print trainable parameters | all parameters
     logger.info(
         f"number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
@@ -293,6 +299,12 @@ if __name__ == "__main__":
     logger.info(f"number of parameters: {sum(p.numel() for p in model.parameters())}")
     model.to(device)
     model.float()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        eps=1e-6,
+    )
     import types
     def forward_(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
@@ -305,19 +317,18 @@ if __name__ == "__main__":
             encoded_input = {k: v.to(self.device) for k, v in encoded_input.items()}
             last_hidden_state = self.t5(**encoded_input).last_hidden_state
             pooled_output = torch.mean(last_hidden_state, dim=1)
-            t5_output.append(self.mlp(pooled_output))
+            t5_output.append(pooled_output)
         t5_output = torch.concat(t5_output)
         t5_output = t5_output / t5_output.norm(dim=-1, keepdim=True)
         text_features = self.compute_text_representations(texts)
-        # text_features = self.mlp(torch.cat([text_features, bert_output], dim=-1))
+        text_features = self.mlp_text(text_features)
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
         text_features = (t5_output + text_features) * 0.5
         text_features = text_features.view([bsz, num_captions, -1])
 
         batch_images = batch_images.to(self.device)
         batch_feat = self.encode_image(batch_images)
-        
-
+        batch_feat = self.mlp_img(batch_feat)
         batch_feat = batch_feat / batch_feat.norm(dim=-1, keepdim=True)
         batch_feat = batch_feat.unsqueeze(2)
 

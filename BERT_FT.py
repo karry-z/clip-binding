@@ -267,20 +267,9 @@ if __name__ == "__main__":
     # get the model
     logger.info("loading the model...")
     model, optimizer = get_model(dataset["train"], config, device)
-    # freeze the clip model
-    # for param in model.clip_model.parameters():
-    #     param.requires_grad = False
-    # get the bert model and freeze it
     from transformers import BertTokenizer, BertModel
     model.bert = BertModel.from_pretrained("bert-base-uncased")
-    # for param in model.bert.parameters():
-    #     param.requires_grad = False
     model.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
-    # add a mlp layer to combine the two features
-    # model.mlp = torch.nn.Sequential(
-    #     torch.nn.Linear(config.emb_dim, config.emb_dim),
-    #     torch.nn.ReLU(),
-    # ) 
     # print trainable parameters | all parameters
     logger.info(
         f"number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
@@ -288,6 +277,12 @@ if __name__ == "__main__":
     logger.info(f"number of parameters: {sum(p.numel() for p in model.parameters())}")
     model.to(device)
     model.float()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        eps=1e-6,
+    )
     import types
     def forward_(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))

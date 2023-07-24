@@ -278,8 +278,11 @@ if __name__ == "__main__":
     model.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
     # add a mlp layer to combine the two features
     model.mlp = torch.nn.Sequential(
-        torch.nn.Linear(2*config.emb_dim, config.emb_dim),
+        torch.nn.Linear(config.emb_dim*2, 300),
         torch.nn.ReLU(),
+        torch.nn.Linear(300, 300),
+        torch.nn.ReLU(),
+        torch.nn.Linear(300, config.emb_dim),
     ) 
     # print trainable parameters | all parameters
     logger.info(
@@ -288,6 +291,12 @@ if __name__ == "__main__":
     logger.info(f"number of parameters: {sum(p.numel() for p in model.parameters())}")
     model.to(device)
     model.float()
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=config.lr,
+        weight_decay=config.weight_decay,
+        eps=1e-6,
+    )
     import types
     def forward_(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
