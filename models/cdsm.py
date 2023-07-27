@@ -5,6 +5,7 @@ from .mult import MultModel, MultRelModel
 from .conv import SimpleConvModel, SimpleConvRelModel
 from .rf import RFConvModel, RFConvRelModel
 from .tl import MatrixModel, MatrixRelObjModel
+from .cat import CatRelModel
 
 REL_MODELS = {
     "add": AddRelModel,
@@ -12,6 +13,7 @@ REL_MODELS = {
     "conv": SimpleConvRelModel,
     "rf": RFConvRelModel,
     "tl": MatrixRelObjModel,
+    "cat": CatRelModel,
 }
 
 OBJ_MODELS = {

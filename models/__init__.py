@@ -20,6 +20,7 @@ def get_model(train_dataset, config, device):
         or config.model_name == "conv"
         or config.model_name == "rf"
         or config.model_name == "tl"
+        or config.model_name == "cat"
     ):
         return get_cdsm(train_dataset, config, device)
     else:
