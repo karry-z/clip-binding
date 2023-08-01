@@ -48,7 +48,7 @@ def get_true_pred_labels(model, dataset, config, device):
     pred_labels = []
     with torch.no_grad():
         for i, (batch_img, texts, label) in enumerate(dataloader):
-            logits_per_image = model(batch_img.to(device), texts)
+            logits_per_image,_,_ = model(batch_img.to(device), texts)
             true_labels.extend(texts[0])
             pred_labels.extend([texts[ctx][batch] for batch,ctx in enumerate(logits_per_image.argmax(axis=1))])
             print(f"Batch {i} done")
