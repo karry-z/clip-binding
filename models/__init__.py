@@ -23,6 +23,21 @@ def get_model(train_dataset, config, device):
         or config.model_name == "cat"
     ):
         return get_cdsm(train_dataset, config, device)
+    elif config.model_name == "comp_clip":
+        from .comp_clip import get_model_
+        return get_model_(config, device)
+    elif (config.model_name == "T5_Text"
+        or config.model_name == "CLIP_T5_Avg"
+        or config.model_name == "CLIP_T5_Cat"):
+        from .clip_t5 import get_model_
+        return get_model_(config, device)
+    elif (config.model_name == "BERT_Text"
+          or config.model_name == "CLIP_BERT_Avg"
+          or config.model_name == "CLIP_BERT_Cat"
+          or config.model_name == "BERT_FT"
+          or config.model_name == "CLIP_BERT_Cat_train_CLIP"):
+        from .clip_bert import get_model_
+        return get_model_(config, device)
     else:
         raise NotImplementedError(
             "Error: Unrecognized Model Name {:s}.".format(config.model_name)
