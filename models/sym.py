@@ -47,6 +47,7 @@ class MLP(nn.Module):
         x = self.h_0(x)
         if self.h_mid != []:
             for h in self.h_mid:
+                h = h.to(self.device).to(x.dtype)
                 x = h(x)
         x = self.out(x)
         return x
@@ -59,6 +60,7 @@ class CLIP_Sym(nn.Module):
         self.clip_model, self.preprocess = clip.load(config.clip_model, device=device)
         self.sym = Sym(config, device)
         self.mlp = MLP(config, device)
+        self.mlp = self.mlp.to(device).to(self.clip_model.dtype)
         # freeze CLIP
         for param in self.clip_model.parameters():
             param.requires_grad = False
@@ -68,7 +70,7 @@ class CLIP_Sym(nn.Module):
         bsz = len(texts)
         num_captions = len(texts[0])
 
-        sym_features = self.sym(texts)
+        sym_features = self.sym(texts).to(self.clip_model.dtype)
         clip_features = self.encode_clip_texts(texts)
         text_features = self.mlp(torch.cat([clip_features, sym_features], dim=-1))
         text_features = text_features / text_features.norm(dim=-1, keepdim=True)
@@ -77,6 +79,59 @@ class CLIP_Sym(nn.Module):
         batch_feat = self.encode_image(batch_images)
         batch_feat = batch_feat / batch_feat.norm(dim=-1, keepdim=True)
         batch_feat = batch_feat.unsqueeze(2)
+        logits_per_image = self.clip_model.logit_scale.exp() * torch.bmm(
+            text_features, batch_feat
+        )
+        logits_per_image = logits_per_image.squeeze(2)
+        return logits_per_image
+
+    
+    def encode_clip_texts(self, texts):
+        tokenized_text = [
+            clip.tokenize(["a photo of" + t for t in _texts]) for _texts in texts
+        ]
+        tokenized_text = torch.stack(tokenized_text, dim=0)
+        bsz, num_captions, padding_length = tokenized_text.shape
+        batch_texts = tokenized_text.view([-1, padding_length]).to(self.device)
+        text_features = self.clip_model.encode_text(batch_texts)
+        return text_features
+    
+    def encode_image(self, batch_images):
+        return self.clip_model.encode_image(batch_images)
+
+
+class Sym_MLP(nn.Module):
+    def __init__(self, config, device) -> None:
+        super().__init__()
+        self.device = device
+        self.clip_model, self.preprocess = clip.load(config.clip_model, device=device)
+        self.sym = Sym(config, device)
+        self.mlp = torch.nn.Sequential(
+            torch.nn.Linear(10, 300),
+            torch.nn.ReLU(),
+            torch.nn.Linear(300, 300),
+            torch.nn.ReLU(),
+            torch.nn.Linear(300, 768)
+        )
+        self.mlp = self.mlp.to(device).to(self.clip_model.dtype)
+        # freeze CLIP
+        for param in self.clip_model.parameters():
+            param.requires_grad = False
+
+    def forward(self, batch_images, texts):
+        texts = list(map(list, zip(*texts)))
+        bsz = len(texts)
+        num_captions = len(texts[0])
+
+        sym_features = self.sym(texts).to(self.clip_model.dtype)
+        text_features = self.mlp(sym_features)
+        text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+        text_features = text_features.view([bsz, num_captions, -1])
+        batch_images = batch_images.to(self.device)
+        with torch.no_grad():
+            batch_feat = self.encode_image(batch_images)
+            batch_feat = batch_feat / batch_feat.norm(dim=-1, keepdim=True)
+            batch_feat = batch_feat.unsqueeze(2)
         logits_per_image = self.clip_model.logit_scale.exp() * torch.bmm(
             text_features, batch_feat
         )
@@ -125,6 +180,8 @@ def get_model_(config, device):
         config.hidden_layers = 3
         config.neurons_per_layer = 100
         model = CLIP_Sym(config, device)
+    elif config.model_name == "Sym_MLP":
+        model = Sym_MLP(config, device)
     else:
         raise NotImplementedError(
             "Error: Unrecognized Model Name {:s}.".format(config.model_name)

@@ -48,6 +48,23 @@ class CLIPModel(torch.nn.Module):
         logits_per_image = logits_per_image.squeeze(2)
         return logits_per_image
 
+    def get_text_embedding(self, texts):
+        tokenized_text = [
+            clip.tokenize(["a photo of" + t for t in _texts]) for _texts in texts
+        ]
+
+        tokenized_text = torch.stack(tokenized_text, dim=0)
+        bsz, num_captions, padding_length = tokenized_text.shape
+        batch_texts = tokenized_text.view([-1, padding_length]).to(self.device)
+        x = self.clip_model.token_embedding(batch_texts).type(self.clip_model.dtype)  # [batch_size, n_ctx, d_model]
+
+        x = x + self.clip_model.positional_embedding.type(self.clip_model.dtype)
+        x = x.permute(1, 0, 2)  # NLD -> LND
+        x = self.clip_model.transformer(x)
+        x = x.permute(1, 0, 2)  # LND -> NLD
+        x = self.clip_model.ln_final(x).type(self.clip_model.dtype)
+        return x
+
 
 def get_clip_model(config, device):
     # load the model

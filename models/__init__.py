@@ -38,6 +38,23 @@ def get_model(train_dataset, config, device):
           or config.model_name == "CLIP_BERT_Cat_train_CLIP"):
         from .clip_bert import get_model_
         return get_model_(config, device)
+    elif (config.model_name == "CLIP_Sym"
+          or config.model_name == "MLP_1_100"
+          or config.model_name == "MLP_2_100"
+          or config.model_name == "MLP_2_300"
+          or config.model_name == "MLP_2_500"
+          or config.model_name == "MLP_2_800"
+          or config.model_name == "Sym_MLP"
+          or config.model_name == "MLP_3_100"):
+
+        from .sym import get_model_
+        return get_model_(config, device)
+    elif config.model_name == "CLIP_Class":
+        from .clip_class import get_model_
+        return get_model_(config, device)
+    elif config.model_name == "DM":
+        from .dm import get_model_
+        return get_model_(config, device)
     else:
         raise NotImplementedError(
             "Error: Unrecognized Model Name {:s}.".format(config.model_name)

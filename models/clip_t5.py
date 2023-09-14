@@ -17,7 +17,7 @@ class CLIP_T5_Base(nn.Module):
             torch.nn.ReLU(),
             torch.nn.Linear(300, config.emb_dim),
         ) 
-        self.mlp = self.mlp.to(device).to(self.clip_model.dtype)
+        self.mlp = self.mlp.to(device).to(self.t5.dtype)
         # freeze CLIP
         for param in self.clip_model.parameters():
             param.requires_grad = False
@@ -54,6 +54,8 @@ class CLIP_T5_Base(nn.Module):
 
 
 class T5_Text(CLIP_T5_Base):
+    def compute_text_representations(self, texts):
+        return self.encode_t5_texts(texts)
     def forward(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
         bsz = len(texts)
@@ -114,6 +116,18 @@ class CLIP_T5_Cat(CLIP_T5_Base):
             torch.nn.ReLU(),
             torch.nn.Linear(300, config.emb_dim),
         )
+    
+    def compute_text_representations(self, texts):
+        texts = list(map(list, zip(*texts)))
+        bsz = len(texts)
+        num_captions = len(texts[0])
+
+        t5_features = self.encode_t5_texts(texts)
+        clip_features = self.encode_clip_texts(texts)
+        # concatenate CLIP and T5 features
+        text_features = self.cat_mlp(torch.cat([t5_features, clip_features], dim=-1))
+        return text_features
+
     def forward(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
         bsz = len(texts)

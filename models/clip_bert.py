@@ -17,6 +17,7 @@ class CLIP_BERT_Base(nn.Module):
         # freeze BERT
         for param in self.bert.parameters():
             param.requires_grad = False
+        self.bert = self.bert.to(self.clip_model.dtype)
 
     def forward(self, batch_images, texts):
         assert False, "Not implemented"
@@ -107,6 +108,7 @@ class CLIP_BERT_Cat(CLIP_BERT_Base):
             torch.nn.ReLU(),
             torch.nn.Linear(300, config.emb_dim),
         )
+        self.cat_mlp = self.cat_mlp.to(self.clip_model.dtype)
     def forward(self, batch_images, texts):
         texts = list(map(list, zip(*texts)))
         bsz = len(texts)

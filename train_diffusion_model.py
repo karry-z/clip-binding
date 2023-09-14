@@ -17,6 +17,15 @@ from datasets.clevr_dataset import ObjectDataset, RelDataset
 from models import get_model
 from utils import set_seed, save_predictions
 
+import torch
+import torchvision.transforms as transforms
+from models import get_model
+from PIL import Image
+import torch.nn.functional as F
+from datasets.clevr_dataset import RelDataset
+from torch.utils.data import DataLoader
+
+
 DIR_PATH = os.path.dirname(os.path.realpath(__file__))
 
 logger = logging.getLogger(__name__)
@@ -27,72 +36,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
 )
-# import wandb
-# wandb.login(key='94cf1e387f47487c4a61b27307ed870991ba63c1')
-
-def choose_dataset(config):
-    """
-    Choose the dataset: single-color, two-object-color, and rel.
-    """
-    dataset = {}
-
-    for split in ["train", "val", "gen"]:
-        if config.dataset == "single-object" or config.dataset == "two-object":
-            _dataset = ObjectDataset(
-                split=split,
-                dataset=config.dataset,
-            )
-        elif config.dataset == "rel":
-            _dataset = RelDataset(split=split)
-        else:
-            logger.error(f"{config.dataset} dataset is not found!")
-            NotImplementedError(f"{config.dataset} dataset is not found!")
-            exit(0)
-
-        dataset[split] = _dataset
-
-    return dataset
-
-
-def run_evaluation(model, dataset, config, return_preds=False):
-    """
-    Function to run evaluation on the valiadation and generalization splits.
-    """
-    model.eval()
-    dataloader = DataLoader(dataset, batch_size=config.eval_batch_size, shuffle=False)
-    labels_list = []
-    logits_list = []
-    progress_bar = tqdm.tqdm(total=len(dataloader), disable=None)
-    all_texts = []
-    with torch.no_grad():
-        for bid, batch in enumerate(dataloader):
-            batch_img, texts, labels = batch
-            logits_per_image = model(batch_img.to(device), texts)
-            texts = list(map(list, zip(*texts)))
-            all_texts += texts
-            batch_target = labels.to(device)
-            labels_list.append(batch_target.cpu())
-            logits_list.append(logits_per_image.cpu())
-
-            progress_bar.update()
-        progress_bar.close()
-
-        labels = torch.cat(labels_list).numpy()
-        res = torch.cat(logits_list).numpy()
-
-        preds = np.argmax(res, axis=1)
-        acc = np.sum(preds == labels) / len(labels) * 100.0
-
-    preds_idx_list = list(preds)
-    preds_text_list = [
-        all_texts[i][pred_idx] for i, pred_idx in enumerate(preds_idx_list)
-    ]
-    labels_text_list = [all_texts[i][label_idx] for i, label_idx in enumerate(labels)]
-
-    if return_preds:
-        return acc, preds_text_list, labels_text_list
-
-    return acc
+import wandb
+wandb.login(key='94cf1e387f47487c4a61b27307ed870991ba63c1')
 
 
 def train_model(model, optimizer, dataset_dict, config, device):
@@ -114,88 +59,94 @@ def train_model(model, optimizer, dataset_dict, config, device):
 
     model.train()
     model.to(device)
-    loss_fn = CrossEntropyLoss()
-    i = 0
-    train_losses = []
-    results = []
-
+    
     for i in range(config.epochs):
         progress_bar = tqdm.tqdm(
             total=len(train_dataloader), desc="epoch % 3d" % (i + 1), disable=None
         )
-        trn_results = []
-        trn_labels = []
         epoch_train_losses = []
         model.train()
         for bid, batch in enumerate(train_dataloader):
-            batch_img, texts, labels = batch
-            logits_per_image = model(batch_img, texts)
-            batch_target = labels.to(device)
-            loss = loss_fn(logits_per_image, batch_target)
-
-            # normalize loss to account for batch accumulation
-            loss = loss / config.gradient_accumulation_steps
+            batch_img, texts = batch
+            batch_img = batch_img.to(device)
+            torch.cuda.empty_cache()
+            loss = model(texts, batch_img)
+            torch.cuda.empty_cache()
             loss.backward()
-            if ((bid + 1) % config.gradient_accumulation_steps == 0) or (
-                bid + 1 == len(train_dataloader)
-            ):
-                optimizer.step()
-                optimizer.zero_grad()
-
+            optimizer.step()
+            optimizer.zero_grad()
             epoch_train_losses.append(loss.item())
             progress_bar.set_postfix({"train loss": np.mean(epoch_train_losses[-50:])})
 
-            trn_labels.append(batch_target.detach().cpu())
-            trn_results.append(logits_per_image.detach().cpu())
-
             progress_bar.update()
+
 
         progress_bar.close()
 
-        lbs = torch.cat(trn_labels).detach().cpu().numpy()
-        res = torch.cat(trn_results).detach().cpu().numpy()
-
-        choices = np.argmax(res, axis=1)
-        train_acc = np.sum(choices == lbs) / len(lbs) * 100.0
-
-        accuracy = {"train": train_acc}
-        for split in ["val", "gen"]:
-            acc, preds, _labels = run_evaluation(
-                model, dataset_dict[split], config, return_preds=True
-            )
-            accuracy[split] = acc
-            save_predictions(preds, _labels, i + 1, split, config.save_dir)
-
-        logger.info(f"Training Accuracy is: {train_acc:.2f}")
 
         progress_bar.write(
             f"epoch {i +1}, "
             f"train loss {np.mean(epoch_train_losses):.2f}, "
-            f"train accuracy {accuracy['train']:.2f}, "
-            f"val acc {accuracy['val']:.2f}, "
-            f"gen acc {accuracy['gen']:.2f}"
         )
         wandb.log({
-            "train": {'loss':np.mean(epoch_train_losses), 'acc': accuracy['train']},
-            "val": {'acc': accuracy['val']},
-            "gen": {'acc': accuracy['gen']}
+            "train": {'loss':np.mean(epoch_train_losses)},
         })
-        train_losses.append(np.mean(epoch_train_losses))
-        results.append(accuracy)
+        if config.save_model:
+            torch.save(model.state_dict(), os.path.join(config.save_dir, "final_model.pt"))
 
-    return model, optimizer, results
 
+    return model, optimizer, {}
+
+
+
+
+from torchvision.transforms import (
+    CenterCrop,
+    Compose,
+    InterpolationMode,
+    Normalize,
+    Resize,
+    ToTensor,
+)
+BICUBIC = InterpolationMode.BICUBIC
+n_px=256
+preprocess = Compose(
+    [
+        Resize(n_px, interpolation=BICUBIC),
+        CenterCrop(n_px),
+        lambda image: image.convert("RGB"),
+        ToTensor(),
+        Normalize(
+            (0.48145466, 0.4578275, 0.40821073),
+            (0.26862954, 0.26130258, 0.27577711),
+        ),
+    ]
+)
+
+def getitem(self, idx):
+    img_path = self.img_dir + self.ims_labels[idx][0]
+    image = Image.open(img_path)  # Image from PIL module
+    image = preprocess(image)
+
+    texts = [self.ims_labels[idx][1]]
+
+    return image, texts
+
+RelDataset.__getitem__ = getitem
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_name", help="name of the experiment", type=str, default="csp"
+        "--model_name", help="name of the experiment", type=str, default="DM"
+    )
+    parser.add_argument(
+        "--text_model_name", help="name of the experiment", type=str, default="clip"
     )
     parser.add_argument(
         "--model_path", help="name of the experiment", default=None
     )
     parser.add_argument(
-        "--dataset", help="name of the dataset", type=str, default="single-object"
+        "--dataset", help="name of the dataset", type=str, default="rel"
     )
     parser.add_argument("--lr", help="learning rate", type=float, default=1e-06)
     parser.add_argument(
@@ -204,9 +155,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--clip_model", help="clip model type", type=str, default="ViT-L/14"
     )
-    parser.add_argument("--epochs", help="number of epochs", default=20, type=int)
+    parser.add_argument("--epochs", help="number of epochs", default=2, type=int)
     parser.add_argument(
-        "--train_batch_size", help="train batch size", default=32, type=int
+        "--train_batch_size", help="train batch size", default=2, type=int
     )
     parser.add_argument(
         "--eval_batch_size", help="eval batch size", default=64, type=int
@@ -240,7 +191,7 @@ if __name__ == "__main__":
         type=float,
         default=0.2,
     )
-    parser.add_argument("--save_dir", help="save path", type=str)
+    parser.add_argument("--save_dir", help="save path", default='/user/work/pu22650/clip-binding-out/DM_train', type=str)
     # parser.add_argument(
     #     "--save_every_n",
     #     default=1,
@@ -261,14 +212,14 @@ if __name__ == "__main__":
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     logger.info(config)
-    # wandb.init(
-    #     # set the wandb project where this run will be logged
-    #     project="clip-binding",
-    #     entity="karry-z",
-    #     name=config.model_name,
-    #     # track hyperparameters and run metadata
-    #     # config=dict
-    # )
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project="clip-binding",
+        entity="karry-z",
+        name=config.model_name,
+        # track hyperparameters and run metadata
+        # config=dict
+    )
 
     if not config.save_dir:
         config.save_dir = os.path.join(
@@ -278,7 +229,7 @@ if __name__ == "__main__":
 
     # get the dataset
     logger.info("loading the dataset...")
-    dataset = choose_dataset(config)
+    dataset = {split:RelDataset(split=split) for split in ["train", "val", "gen"]}
 
     # get the model
     logger.info("loading the model...")
@@ -296,7 +247,8 @@ if __name__ == "__main__":
             config,
             device,
         )
-
+        if not os.path.exists(config.save_dir):
+            os.makedirs(config.save_dir)
         with open(os.path.join(config.save_dir, "config.pkl"), "wb") as fp:
             pickle.dump(config, fp)
 
@@ -305,10 +257,6 @@ if __name__ == "__main__":
 
         if config.save_model:
             torch.save(model.state_dict(), os.path.join(config.save_dir, "final_model.pt"))
-    else:
-        logger.info("skipping training and directly evaluating the model...")
-        for split in ["train", "val", "gen"]:
-            acc = run_evaluation(model, dataset[split], config)
-            print(f"{split}: {acc:.2f}")
+
 
     logger.info("done!")

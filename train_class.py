@@ -27,8 +27,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
     level=logging.INFO,
 )
-# import wandb
-# wandb.login(key='94cf1e387f47487c4a61b27307ed870991ba63c1')
+import wandb
+wandb.login(key='94cf1e387f47487c4a61b27307ed870991ba63c1')
 
 def choose_dataset(config):
     """
@@ -115,9 +115,18 @@ def train_model(model, optimizer, dataset_dict, config, device):
     model.train()
     model.to(device)
     loss_fn = CrossEntropyLoss()
+    l2_fn = CrossEntropyLoss()
     i = 0
     train_losses = []
     results = []
+    rels = ["front", "behind", "left", "right"]
+    shapes = ["cube", "sphere", "cylinder"]
+    all_contexts = [f'{shape1} {rel} {shape2}' for shape1 in shapes for rel in rels for shape2 in shapes if shape2 != shape1]
+    def get_24_labels(texts, labels):
+        # get text by label and get the index of the text in all_contexts
+        text_idx = [all_contexts.index(texts[labels[i]][i]) for i in range(len(labels))]
+        # get the 24 labels
+        return torch.tensor(text_idx).to(device)
 
     for i in range(config.epochs):
         progress_bar = tqdm.tqdm(
@@ -126,13 +135,18 @@ def train_model(model, optimizer, dataset_dict, config, device):
         trn_results = []
         trn_labels = []
         epoch_train_losses = []
+        epoch_l1_losses = []
+        epoch_l2_losses = []
         model.train()
         for bid, batch in enumerate(train_dataloader):
             batch_img, texts, labels = batch
-            logits_per_image = model(batch_img, texts)
+            logits_per_image, class_pred = model(batch_img, texts)
             batch_target = labels.to(device)
-            loss = loss_fn(logits_per_image, batch_target)
-
+            targets = get_24_labels(texts, labels)
+            l2 = l2_fn(class_pred, targets)
+            l1 = loss_fn(logits_per_image, batch_target)
+            loss = l1 + l2
+            logger.info(f"contrastive loss: {l1:.2f}; auxiliary loss: {l2:.2f}")
             # normalize loss to account for batch accumulation
             loss = loss / config.gradient_accumulation_steps
             loss.backward()
@@ -142,6 +156,8 @@ def train_model(model, optimizer, dataset_dict, config, device):
                 optimizer.step()
                 optimizer.zero_grad()
 
+            epoch_l1_losses.append(l1.item())
+            epoch_l2_losses.append(l2.item())
             epoch_train_losses.append(loss.item())
             progress_bar.set_postfix({"train loss": np.mean(epoch_train_losses[-50:])})
 
@@ -176,7 +192,7 @@ def train_model(model, optimizer, dataset_dict, config, device):
             f"gen acc {accuracy['gen']:.2f}"
         )
         wandb.log({
-            "train": {'loss':np.mean(epoch_train_losses), 'acc': accuracy['train']},
+            "train": {'loss':np.mean(epoch_train_losses), 'l1':np.mean(epoch_l1_losses), 'l2':np.mean(epoch_l2_losses), 'acc': accuracy['train']},
             "val": {'acc': accuracy['val']},
             "gen": {'acc': accuracy['gen']}
         })
@@ -189,13 +205,13 @@ def train_model(model, optimizer, dataset_dict, config, device):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model_name", help="name of the experiment", type=str, default="csp"
+        "--model_name", help="name of the experiment", type=str, default="CLIP_Class"
     )
     parser.add_argument(
         "--model_path", help="name of the experiment", default=None
     )
     parser.add_argument(
-        "--dataset", help="name of the dataset", type=str, default="single-object"
+        "--dataset", help="name of the dataset", type=str, default="rel"
     )
     parser.add_argument("--lr", help="learning rate", type=float, default=1e-06)
     parser.add_argument(
@@ -206,7 +222,7 @@ if __name__ == "__main__":
     )
     parser.add_argument("--epochs", help="number of epochs", default=20, type=int)
     parser.add_argument(
-        "--train_batch_size", help="train batch size", default=32, type=int
+        "--train_batch_size", help="train batch size", default=2, type=int
     )
     parser.add_argument(
         "--eval_batch_size", help="eval batch size", default=64, type=int
@@ -261,14 +277,14 @@ if __name__ == "__main__":
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     logger.info(config)
-    # wandb.init(
-    #     # set the wandb project where this run will be logged
-    #     project="clip-binding",
-    #     entity="karry-z",
-    #     name=config.model_name,
-    #     # track hyperparameters and run metadata
-    #     # config=dict
-    # )
+    wandb.init(
+        # set the wandb project where this run will be logged
+        project="clip-binding",
+        entity="karry-z",
+        name=config.model_name,
+        # track hyperparameters and run metadata
+        # config=dict
+    )
 
     if not config.save_dir:
         config.save_dir = os.path.join(
