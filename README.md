@@ -1,6 +1,6 @@
 # Evaluating CLIP’s Understanding on Relationships in a Blocks World
 
-Code in the paper: [Evaluating CLIP’s Understanding on Relationships in a Blocks World]([https://arxiv.org/abs/2212.10537](https://ieeexplore.ieee.org/abstract/document/10386915)).
+Code in the paper: [Evaluating CLIP’s Understanding on Relationships in a Blocks World](https://ieeexplore.ieee.org/abstract/document/10386915).
 
 
 ## Citation
